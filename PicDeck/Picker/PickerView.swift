@@ -1,0 +1,120 @@
+import SwiftUI
+
+struct PickerView: View {
+    @ObservedObject var store: MediaLibraryStore
+    @ObservedObject var selection: PickerSelection
+
+    let onCancel: () -> Void
+    let onPaste: (MediaItem) -> Void
+
+    @State private var searchText = ""
+    @FocusState private var searchFieldIsFocused: Bool
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 116, maximum: 140), spacing: 14)
+    ]
+
+    private var filteredItems: [MediaItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !query.isEmpty else {
+            return store.items
+        }
+
+        return store.items.filter { item in
+            item.filename.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            searchField
+
+            if let errorMessage = store.errorMessage {
+                ContentUnavailableView("Could not load library", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredItems.isEmpty {
+                ContentUnavailableView("No media found", systemImage: "photo", description: Text("Add images or GIFs to ~/Pictures/PicDeck Library/"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 14) {
+                        ForEach(filteredItems) { item in
+                            MediaThumbnailView(
+                                item: item,
+                                isSelected: selection.selectedItem == item
+                            )
+                            .onTapGesture {
+                                selection.selectedItem = item
+                                onPaste(item)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 720, height: 520)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.18))
+        }
+        .onAppear {
+            searchFieldIsFocused = true
+            syncSelection()
+        }
+        .onChange(of: searchText) {
+            syncSelection()
+        }
+        .onChange(of: store.items) {
+            syncSelection()
+        }
+        .onSubmit {
+            if let item = selection.selectedItem {
+                onPaste(item)
+            }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Search filenames", text: $searchText)
+                .textFieldStyle(.plain)
+                .focused($searchFieldIsFocused)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 38)
+        .background(.quaternary.opacity(0.65), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func syncSelection() {
+        let items = filteredItems
+
+        guard !items.isEmpty else {
+            selection.selectedItem = nil
+            return
+        }
+
+        if let selectedItem = selection.selectedItem, items.contains(selectedItem) {
+            return
+        }
+
+        selection.selectedItem = items.first
+    }
+}
+
