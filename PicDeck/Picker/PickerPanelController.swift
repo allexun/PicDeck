@@ -8,6 +8,7 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
     private let onPaste: (MediaItem) -> Void
     private let selection = PickerSelection()
     private var panel: KeyHandlingPanel?
+    private var outsideClickMonitors: [Any] = []
 
     init(libraryStore: MediaLibraryStore, onPaste: @escaping (MediaItem) -> Void) {
         self.libraryStore = libraryStore
@@ -22,6 +23,7 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
         panel.makeKeyAndOrderFront(nil)
+        startOutsideClickMonitoring()
     }
 
     func close() {
@@ -88,6 +90,40 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
         onPaste(item)
     }
 
+    func windowWillClose(_ notification: Notification) {
+        stopOutsideClickMonitoring()
+    }
+
+    private func startOutsideClickMonitoring() {
+        stopOutsideClickMonitoring()
+
+        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+
+        let localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            self?.closeIfClickIsOutsidePanel()
+            return event
+        }
+
+        let globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+            self?.closeIfClickIsOutsidePanel()
+        }
+
+        outsideClickMonitors = [localMonitor as Any, globalMonitor as Any]
+    }
+
+    private func stopOutsideClickMonitoring() {
+        outsideClickMonitors.forEach(NSEvent.removeMonitor)
+        outsideClickMonitors.removeAll()
+    }
+
+    private func closeIfClickIsOutsidePanel() {
+        guard let panel, panel.isVisible, !panel.frame.contains(NSEvent.mouseLocation) else {
+            return
+        }
+
+        close()
+    }
+
     private func center(_ panel: NSPanel) {
         let screen = NSScreen.screens.first { screen in
             screen.frame.contains(NSEvent.mouseLocation)
@@ -133,5 +169,9 @@ final class KeyHandlingPanel: NSPanel {
         default:
             super.keyDown(with: event)
         }
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        onEscape?()
     }
 }
