@@ -31,11 +31,27 @@ final class AppCoordinator: ObservableObject {
         NSWorkspace.shared.open(libraryStore.libraryFolderURL)
     }
 
+    func importImageFromClipboard() {
+        do {
+            try libraryStore.importImageFromClipboard()
+        } catch {
+            presentImportError(error)
+        }
+    }
+
     func requestAccessibilityPermission() {
         AccessibilityPermission.request()
     }
 
     func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func presentImportError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "Could not import image"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 }

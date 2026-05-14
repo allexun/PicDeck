@@ -71,6 +71,9 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
                 onCancel: { [weak self] in
                     self?.close()
                 },
+                onImportFromClipboard: { [libraryStore] in
+                    try libraryStore.importImageFromClipboard()
+                },
                 onPaste: { [weak self] item in
                     self?.paste(item)
                 }

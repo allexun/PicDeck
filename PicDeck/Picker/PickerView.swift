@@ -5,9 +5,11 @@ struct PickerView: View {
     @ObservedObject var selection: PickerSelection
 
     let onCancel: () -> Void
+    let onImportFromClipboard: () throws -> MediaItem
     let onPaste: (MediaItem) -> Void
 
     @State private var searchText = ""
+    @State private var importErrorMessage: String?
     @FocusState private var searchFieldIsFocused: Bool
 
     private let columns = [
@@ -28,7 +30,14 @@ struct PickerView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            searchField
+            header
+
+            if let importErrorMessage {
+                Text(importErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if let errorMessage = store.errorMessage {
                 ContentUnavailableView("Could not load library", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
@@ -78,6 +87,19 @@ struct PickerView: View {
         }
     }
 
+    private var header: some View {
+        HStack(spacing: 10) {
+            searchField
+
+            Button {
+                importFromClipboard()
+            } label: {
+                Label("Import from Clipboard", systemImage: "doc.on.clipboard")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
@@ -99,7 +121,19 @@ struct PickerView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 38)
+        .frame(maxWidth: .infinity)
         .background(.quaternary.opacity(0.65), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func importFromClipboard() {
+        do {
+            let item = try onImportFromClipboard()
+            searchText = ""
+            selection.selectedItem = item
+            importErrorMessage = nil
+        } catch {
+            importErrorMessage = error.localizedDescription
+        }
     }
 
     private func syncSelection() {
@@ -117,4 +151,3 @@ struct PickerView: View {
         selection.selectedItem = items.first
     }
 }
-

@@ -9,6 +9,11 @@ struct MenuBarView: View {
         }
         .keyboardShortcut(" ", modifiers: .option)
 
+        Button("Import Image from Clipboard") {
+            coordinator.importImageFromClipboard()
+        }
+        .keyboardShortcut("v", modifiers: [.command, .shift])
+
         Button("Open Library Folder") {
             coordinator.openLibraryFolder()
         }
@@ -25,4 +30,3 @@ struct MenuBarView: View {
         .keyboardShortcut("q")
     }
 }
-

@@ -7,6 +7,7 @@ PicDeck is a lightweight macOS menu bar app for quickly pasting frequently used 
 - Menu bar app that stays out of the Dock.
 - Global picker shortcut: `Option-Space`.
 - Searchable media grid for images and GIFs.
+- Import the current clipboard image into the library from the picker or menu bar.
 - Library folder at `~/Pictures/PicDeck Library/`.
 - Supported file types: `png`, `jpg`, `jpeg`, `gif`, `webp`, `heic`, and `tiff`.
 - Optional automatic paste into the previously focused app after granting Accessibility permission.
@@ -61,7 +62,7 @@ Launch it from `/Applications/PicDeck.app`. PicDeck runs as a menu bar app, so l
 2. Click the PicDeck menu bar icon.
 3. Choose **Open Library Folder**.
 4. Add images or GIFs to `~/Pictures/PicDeck Library/`.
-5. Press `Option-Space` to open the picker.
+5. Choose **Import Image from Clipboard** to save the current clipboard image, or press `Option-Space` to open the picker and import from there.
 6. Search or select an item, then press `Return` or click a thumbnail.
 
 PicDeck will copy the selected file to the clipboard. To let PicDeck also paste automatically into the app you were using, grant Accessibility permission:
@@ -74,6 +75,7 @@ PicDeck will copy the selected file to the clipboard. To let PicDeck also paste 
 ## Usage Notes
 
 - `Option-Space` opens the picker from anywhere.
+- `Command-Shift-V` imports the current clipboard image while the PicDeck menu is open.
 - `Return` pastes the selected item.
 - `Escape` closes the picker.
 - The picker refreshes the library each time it opens.
