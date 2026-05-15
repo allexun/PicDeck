@@ -64,12 +64,6 @@ struct PickerView: View {
             }
         }
         .padding(20)
-        .frame(width: 720, height: 520)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.white.opacity(0.18))
-        }
         .onAppear {
             searchFieldIsFocused = true
             syncSelection()
@@ -95,9 +89,12 @@ struct PickerView: View {
                 importFromClipboard()
             } label: {
                 Label("Import from Clipboard", systemImage: "doc.on.clipboard")
+                    .frame(maxHeight: .infinity)
             }
-            .buttonStyle(.bordered)
-        }
+            .background(.quaternary.opacity(0.65))
+            .cornerRadius(8)
+            .frame(maxHeight: .infinity)
+        }.frame(height: 38)
     }
 
     private var searchField: some View {

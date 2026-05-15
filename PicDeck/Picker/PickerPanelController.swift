@@ -31,42 +31,7 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
     }
 
     private func makePanel() -> KeyHandlingPanel {
-        let panel = KeyHandlingPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),
-            styleMask: [.titled, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-
-        panel.delegate = self
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        panel.isReleasedWhenClosed = false
-        panel.hidesOnDeactivate = false
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = true
-
-        panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
-
-        panel.onEscape = { [weak self] in
-            self?.close()
-        }
-
-        panel.onReturn = { [weak self] in
-            guard let self, let item = self.selection.selectedItem else {
-                return
-            }
-
-            self.paste(item)
-        }
-
-        panel.contentView = NSHostingView(
+        let panel = KeyHandlingPanel(NSHostingView(
             rootView: PickerView(
                 store: libraryStore,
                 selection: selection,
@@ -80,7 +45,21 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
                     self?.paste(item)
                 }
             )
-        )
+        ))
+
+        panel.delegate = self
+
+        panel.onEscape = { [weak self] in
+            self?.close()
+        }
+
+        panel.onReturn = { [weak self] in
+            guard let self, let item = self.selection.selectedItem else {
+                return
+            }
+
+            self.paste(item)
+        }
 
         return panel
     }
@@ -148,7 +127,7 @@ final class PickerSelection: ObservableObject {
     @Published var selectedItem: MediaItem?
 }
 
-final class KeyHandlingPanel: NSPanel {
+final class KeyHandlingPanel: GlassPanel {
     var onEscape: (() -> Void)?
     var onReturn: (() -> Void)?
 

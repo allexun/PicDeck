@@ -9,9 +9,6 @@ struct MediaThumbnailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.black.opacity(0.12))
-
                 if let image {
                     Image(nsImage: image)
                         .resizable()
@@ -58,4 +55,3 @@ struct MediaThumbnailView: View {
         }
     }
 }
-
