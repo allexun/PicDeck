@@ -33,26 +33,24 @@ class GlassPanel: NSPanel {
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
 
-        if #available(macOS 26, *) {
-            configureGlass(rootView)
-        } else {
-            configureOld(rootView)
-        }
+        configureGlass(rootView)
     }
 
     private func configureGlass(_ rootView: NSView) {
-        guard #available(macOS 26, *) else { return }
+        let glass = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        glass.blendingMode = .behindWindow
+        glass.material = .hudWindow
+        glass.state = .active
+        glass.wantsLayer = true
+        glass.layer?.cornerRadius = cornerRadius
+        glass.layer?.masksToBounds = true
 
-        let glass = NSGlassEffectView(frame: NSRect(x: 0, y: 0, width: width, height: height))
-        glass.style = .regular
-        glass.cornerRadius = cornerRadius
-
+        rootView.wantsLayer = true
         rootView.layer?.backgroundColor = NSColor.clear.cgColor
         rootView.layer?.cornerRadius = cornerRadius
 
         glass.addSubview(rootView)
 
-        rootView.wantsLayer = true
         rootView.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
@@ -63,13 +61,5 @@ class GlassPanel: NSPanel {
         ])
 
         contentView = glass
-    }
-
-    private func configureOld(_ rootView: NSView) {
-        rootView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        rootView.layer?.cornerRadius = cornerRadius
-
-        hasShadow = true
-        contentView = rootView
     }
 }
