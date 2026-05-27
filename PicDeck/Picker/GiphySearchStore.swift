@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 @MainActor
@@ -22,10 +23,10 @@ final class GiphySearchStore: ObservableObject {
 
     init(
         configurationFileURL: URL,
-        client: GiphyClient = GiphyClient()
+        client: GiphyClient? = nil
     ) {
         self.configurationFileURL = configurationFileURL
-        self.client = client
+        self.client = client ?? GiphyClient()
         loadConfiguration()
     }
 

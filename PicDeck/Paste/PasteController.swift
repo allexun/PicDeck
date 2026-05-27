@@ -24,14 +24,32 @@ final class PasteController {
             return
         }
 
-        previouslyFocusedApplication?.activate(options: [.activateAllWindows])
+        let targetApplication = previouslyFocusedApplication
+        targetApplication?.activate(options: [.activateAllWindows])
 
         guard AccessibilityPermission.isTrusted else {
             return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            Self.sendCommandV()
+        Self.sendCommandV(whenFrontmost: targetApplication)
+    }
+
+    private static func sendCommandV(whenFrontmost application: NSRunningApplication?, attemptsRemaining: Int = 8) {
+        guard
+            let application,
+            NSWorkspace.shared.frontmostApplication?.processIdentifier != application.processIdentifier,
+            attemptsRemaining > 0
+        else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                sendCommandV()
+            }
+            return
+        }
+
+        application.activate(options: [.activateAllWindows])
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            sendCommandV(whenFrontmost: application, attemptsRemaining: attemptsRemaining - 1)
         }
     }
 
