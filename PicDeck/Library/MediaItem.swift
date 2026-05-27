@@ -1,21 +1,71 @@
 import Foundation
 
 struct MediaItem: Identifiable, Hashable {
-    let id: UUID
+    let id: String
     let url: URL
     let filename: String
     let filenameStem: String
     let fileExtension: String
     let isGIF: Bool
+    let previewURL: URL?
+    let source: MediaItemSource
 
-    init(id: UUID = UUID(), url: URL) {
+    init(url: URL) {
         let fileExtension = url.pathExtension.lowercased()
 
-        self.id = id
+        self.id = "library:\(url.standardizedFileURL.path)"
         self.url = url
         self.filename = url.lastPathComponent
         self.filenameStem = url.deletingPathExtension().lastPathComponent
         self.fileExtension = fileExtension
         self.isGIF = fileExtension == "gif"
+        self.previewURL = nil
+        self.source = .library
     }
+
+    init(giphyGIF: GiphyGIF) {
+        let normalizedTitle = Self.normalizedRemoteFilenameStem(from: giphyGIF.title, fallbackID: giphyGIF.id)
+
+        self.id = "giphy:\(giphyGIF.id)"
+        self.url = giphyGIF.originalGIFURL
+        self.filename = "\(normalizedTitle).gif"
+        self.filenameStem = normalizedTitle
+        self.fileExtension = "gif"
+        self.isGIF = true
+        self.previewURL = giphyGIF.previewImageURL
+        self.source = .giphy(giphyGIF)
+    }
+
+    var isLibraryItem: Bool {
+        if case .library = source {
+            return true
+        }
+
+        return false
+    }
+
+    private static func normalizedRemoteFilenameStem(from title: String, fallbackID: String) -> String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredScalars = trimmedTitle.unicodeScalars.map { scalar -> Character in
+            let invalidCharacters = CharacterSet(charactersIn: "/:\\\n\r\t")
+            return invalidCharacters.contains(scalar) ? "-" : Character(scalar)
+        }
+        let collapsedTitle = String(filteredScalars)
+            .replacingOccurrences(of: #"[\s-]+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return collapsedTitle.isEmpty ? "Giphy \(fallbackID)" : collapsedTitle
+    }
+}
+
+enum MediaItemSource: Hashable {
+    case library
+    case giphy(GiphyGIF)
+}
+
+struct GiphyGIF: Hashable {
+    let id: String
+    let title: String
+    let previewImageURL: URL
+    let originalGIFURL: URL
 }
