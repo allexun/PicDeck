@@ -83,6 +83,52 @@ final class MediaLibraryStore: ObservableObject {
         return items.first { $0.url == destinationURL } ?? MediaItem(url: destinationURL)
     }
 
+    @discardableResult
+    func rename(_ item: MediaItem, toBaseName proposedBaseName: String) throws -> MediaItem {
+        try createLibraryFolderIfNeeded()
+
+        let baseName = try normalizedBaseName(proposedBaseName, fileExtension: item.fileExtension)
+        let destinationURL = libraryFolderURL
+            .appendingPathComponent(baseName)
+            .appendingPathExtension(item.fileExtension)
+
+        guard item.url.path != destinationURL.path else {
+            return item
+        }
+
+        guard FileManager.default.fileExists(atPath: item.url.path) else {
+            throw MediaLibraryRenameError.originalFileMissing
+        }
+
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            guard item.url.path.caseInsensitiveCompare(destinationURL.path) == .orderedSame else {
+                throw MediaLibraryRenameError.nameAlreadyExists(destinationURL.lastPathComponent)
+            }
+
+            let temporaryURL = libraryFolderURL
+                .appendingPathComponent(".picdeck-rename-\(UUID().uuidString)")
+                .appendingPathExtension(item.fileExtension)
+
+            try FileManager.default.moveItem(at: item.url, to: temporaryURL)
+
+            do {
+                try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
+            } catch {
+                if FileManager.default.fileExists(atPath: temporaryURL.path) {
+                    try? FileManager.default.moveItem(at: temporaryURL, to: item.url)
+                }
+
+                throw error
+            }
+        } else {
+            try FileManager.default.moveItem(at: item.url, to: destinationURL)
+        }
+
+        refresh()
+
+        return items.first { $0.url == destinationURL } ?? MediaItem(url: destinationURL)
+    }
+
     private func createLibraryFolderIfNeeded() throws {
         try FileManager.default.createDirectory(
             at: libraryFolderURL,
@@ -157,6 +203,28 @@ final class MediaLibraryStore: ObservableObject {
         return "Clipboard Image \(formatter.string(from: Date())).\(fileExtension)"
     }
 
+    private func normalizedBaseName(_ proposedBaseName: String, fileExtension: String) throws -> String {
+        var baseName = proposedBaseName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if baseName.lowercased().hasSuffix(".\(fileExtension.lowercased())") {
+            baseName = String(baseName.dropLast(fileExtension.count + 1))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        var invalidCharacters = CharacterSet(charactersIn: "/:")
+        invalidCharacters.formUnion(.newlines)
+
+        guard !baseName.isEmpty else {
+            throw MediaLibraryRenameError.emptyName
+        }
+
+        guard baseName != "." && baseName != ".." && baseName.rangeOfCharacter(from: invalidCharacters) == nil else {
+            throw MediaLibraryRenameError.invalidName
+        }
+
+        return baseName
+    }
+
     private func uniqueDestinationURL(preferredName: String, fallbackExtension: String) -> URL {
         let fallbackExtension = fallbackExtension.isEmpty ? "png" : fallbackExtension.lowercased()
         let preferredURL = URL(fileURLWithPath: preferredName)
@@ -178,6 +246,26 @@ final class MediaLibraryStore: ObservableObject {
         }
 
         return url
+    }
+}
+
+enum MediaLibraryRenameError: LocalizedError {
+    case emptyName
+    case invalidName
+    case nameAlreadyExists(String)
+    case originalFileMissing
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyName:
+            "Enter a filename."
+        case .invalidName:
+            "Filenames cannot be '.', '..', or contain '/', ':', or line breaks."
+        case .nameAlreadyExists(let filename):
+            "A file named \(filename) already exists."
+        case .originalFileMissing:
+            "The selected file is no longer in the PicDeck library."
+        }
     }
 }
 

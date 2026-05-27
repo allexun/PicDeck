@@ -41,6 +41,9 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
                 onImportFromClipboard: { [libraryStore] in
                     try libraryStore.importImageFromClipboard()
                 },
+                onRename: { [weak self] item in
+                    self?.rename(item)
+                },
                 onPaste: { [weak self] item in
                     self?.paste(item)
                 }
@@ -62,6 +65,59 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
         }
 
         return panel
+    }
+
+    private func rename(_ item: MediaItem) -> MediaItem? {
+        stopOutsideClickMonitoring()
+
+        defer {
+            if panel?.isVisible == true {
+                startOutsideClickMonitoring()
+            }
+        }
+
+        var proposedName = item.filenameStem
+
+        while true {
+            guard let newName = promptForRename(proposedName: proposedName) else {
+                return nil
+            }
+
+            do {
+                return try libraryStore.rename(item, toBaseName: newName)
+            } catch {
+                proposedName = newName
+                presentRenameError(error)
+            }
+        }
+    }
+
+    private func promptForRename(proposedName: String) -> String? {
+        let textField = NSTextField(string: proposedName)
+        textField.frame = NSRect(x: 0, y: 0, width: 360, height: 24)
+
+        let alert = NSAlert()
+        alert.messageText = "Rename File"
+        alert.accessoryView = textField
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = textField
+
+        let response = alert.runModal()
+
+        guard response == .alertFirstButtonReturn else {
+            return nil
+        }
+
+        return textField.stringValue
+    }
+
+    private func presentRenameError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "Could not rename file"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 
     private func paste(_ item: MediaItem) {

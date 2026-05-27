@@ -6,6 +6,7 @@ struct PickerView: View {
 
     let onCancel: () -> Void
     let onImportFromClipboard: () throws -> MediaItem
+    let onRename: (MediaItem) -> MediaItem?
     let onPaste: (MediaItem) -> Void
 
     @State private var searchText = ""
@@ -51,7 +52,10 @@ struct PickerView: View {
                         ForEach(filteredItems) { item in
                             MediaThumbnailView(
                                 item: item,
-                                isSelected: selection.selectedItem == item
+                                isSelected: selection.selectedItem == item,
+                                onRename: {
+                                    rename(item)
+                                }
                             )
                             .onTapGesture {
                                 selection.selectedItem = item
@@ -131,6 +135,17 @@ struct PickerView: View {
         } catch {
             importErrorMessage = error.localizedDescription
         }
+    }
+
+    private func rename(_ item: MediaItem) {
+        selection.selectedItem = item
+
+        guard let renamedItem = onRename(item) else {
+            return
+        }
+
+        searchText = ""
+        selection.selectedItem = renamedItem
     }
 
     private func syncSelection() {

@@ -3,6 +3,7 @@ import SwiftUI
 struct MediaThumbnailView: View {
     let item: MediaItem
     let isSelected: Bool
+    let onRename: () -> Void
 
     @State private var image: NSImage?
 
@@ -47,6 +48,13 @@ struct MediaThumbnailView: View {
                 .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
         }
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contextMenu {
+            Button {
+                onRename()
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+        }
         .onAppear {
             image = NSImage(contentsOf: item.url)
         }
