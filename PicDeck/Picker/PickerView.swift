@@ -13,9 +13,18 @@ struct PickerView: View {
     @State private var importErrorMessage: String?
     @FocusState private var searchFieldIsFocused: Bool
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 116, maximum: 140), spacing: 14)
-    ]
+    private let gridSpacing: CGFloat = 14
+    private let thumbnailMinimumWidth: CGFloat = 116
+    private let thumbnailMaximumWidth: CGFloat = 140
+
+    private var columns: [GridItem] {
+        [
+            GridItem(
+                .adaptive(minimum: thumbnailMinimumWidth, maximum: thumbnailMaximumWidth),
+                spacing: gridSpacing
+            )
+        ]
+    }
 
     private var filteredItems: [MediaItem] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,23 +56,44 @@ struct PickerView: View {
                 ContentUnavailableView("No media found", systemImage: "photo", description: Text("Add images or GIFs to ~/Pictures/PicDeck Library/"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(filteredItems) { item in
-                            MediaThumbnailView(
-                                item: item,
-                                isSelected: selection.selectedItem == item,
-                                onRename: {
-                                    rename(item)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: gridSpacing) {
+                            ForEach(filteredItems) { item in
+                                MediaThumbnailView(
+                                    item: item,
+                                    isSelected: selection.selectedItem == item,
+                                    onRename: {
+                                        rename(item)
+                                    }
+                                )
+                                .id(item.id)
+                                .onTapGesture {
+                                    selection.selectedItem = item
+                                    onPaste(item)
                                 }
-                            )
-                            .onTapGesture {
-                                selection.selectedItem = item
-                                onPaste(item)
                             }
                         }
+                        .background {
+                            GeometryReader { geometry in
+                                Color.clear
+                                    .preference(key: GridWidthPreferenceKey.self, value: geometry.size.width)
+                            }
+                        }
+                        .padding(.vertical, 2)
                     }
-                    .padding(.vertical, 2)
+                    .onPreferenceChange(GridWidthPreferenceKey.self) { width in
+                        updateColumnCount(for: width)
+                    }
+                    .onChange(of: selection.selectedItem) {
+                        guard let item = selection.selectedItem else {
+                            return
+                        }
+
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            proxy.scrollTo(item.id, anchor: .center)
+                        }
+                    }
                 }
             }
         }
@@ -77,6 +107,14 @@ struct PickerView: View {
         }
         .onChange(of: store.items) {
             syncSelection()
+        }
+        .onChange(of: selection.renameRequest) {
+            guard let item = selection.renameRequest else {
+                return
+            }
+
+            selection.renameRequest = nil
+            rename(item)
         }
         .onSubmit {
             if let item = selection.selectedItem {
@@ -150,6 +188,7 @@ struct PickerView: View {
 
     private func syncSelection() {
         let items = filteredItems
+        selection.visibleItems = items
 
         guard !items.isEmpty else {
             selection.selectedItem = nil
@@ -161,5 +200,21 @@ struct PickerView: View {
         }
 
         selection.selectedItem = items.first
+    }
+
+    private func updateColumnCount(for width: CGFloat) {
+        guard width > 0 else {
+            return
+        }
+
+        selection.columnCount = max(1, Int((width + gridSpacing) / (thumbnailMinimumWidth + gridSpacing)))
+    }
+}
+
+private struct GridWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

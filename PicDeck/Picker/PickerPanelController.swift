@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Carbon
 import SwiftUI
 
 @MainActor
@@ -9,6 +10,9 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
     private let selection = PickerSelection()
     private var panel: KeyHandlingPanel?
     private var outsideClickMonitors: [Any] = []
+    private var keyDownMonitor: Any?
+    private var shortcutHotKeyRefs: [EventHotKeyRef] = []
+    private var shortcutHandlerRef: EventHandlerRef?
 
     init(libraryStore: MediaLibraryStore, onPaste: @escaping (MediaItem) -> Void) {
         self.libraryStore = libraryStore
@@ -24,6 +28,7 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
         panel.orderFrontRegardless()
         panel.makeKeyAndOrderFront(nil)
         startOutsideClickMonitoring()
+        startKeyboardMonitoring()
     }
 
     func close() {
@@ -64,15 +69,25 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
             self.paste(item)
         }
 
+        panel.onNavigation = { [weak self] direction in
+            self?.selection.select(direction)
+        }
+
+        panel.onRename = { [weak self] in
+            self?.selection.requestRename()
+        }
+
         return panel
     }
 
     private func rename(_ item: MediaItem) -> MediaItem? {
         stopOutsideClickMonitoring()
+        stopKeyboardMonitoring()
 
         defer {
             if panel?.isVisible == true {
                 startOutsideClickMonitoring()
+                startKeyboardMonitoring()
             }
         }
 
@@ -127,6 +142,7 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         stopOutsideClickMonitoring()
+        stopKeyboardMonitoring()
     }
 
     private func startOutsideClickMonitoring() {
@@ -149,6 +165,161 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
     private func stopOutsideClickMonitoring() {
         outsideClickMonitors.forEach(NSEvent.removeMonitor)
         outsideClickMonitors.removeAll()
+    }
+
+    private func startKeyboardMonitoring() {
+        stopKeyboardMonitoring()
+
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard self?.handleCommandShortcut(event) == true else {
+                return event
+            }
+
+            return nil
+        }
+
+        registerKeyboardShortcuts()
+    }
+
+    private func stopKeyboardMonitoring() {
+        if let keyDownMonitor {
+            NSEvent.removeMonitor(keyDownMonitor)
+            self.keyDownMonitor = nil
+        }
+
+        unregisterKeyboardShortcuts()
+    }
+
+    private func registerKeyboardShortcuts() {
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: OSType(kEventHotKeyPressed)
+        )
+
+        let userData = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, userData in
+                guard let event, let userData else {
+                    return OSStatus(eventNotHandledErr)
+                }
+
+                var hotKeyID = EventHotKeyID()
+                GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &hotKeyID
+                )
+
+                guard hotKeyID.signature == pickerFourCharacterCode("PDKS") else {
+                    return OSStatus(eventNotHandledErr)
+                }
+
+                let controller = Unmanaged<PickerPanelController>.fromOpaque(userData).takeUnretainedValue()
+
+                DispatchQueue.main.async {
+                    controller.handleRegisteredShortcut(id: hotKeyID.id)
+                }
+
+                return noErr
+            },
+            1,
+            &eventType,
+            userData,
+            &shortcutHandlerRef
+        )
+
+        registerKeyboardShortcut(id: 1, keyCode: kVK_LeftArrow)
+        registerKeyboardShortcut(id: 2, keyCode: kVK_RightArrow)
+        registerKeyboardShortcut(id: 3, keyCode: kVK_DownArrow)
+        registerKeyboardShortcut(id: 4, keyCode: kVK_UpArrow)
+        registerKeyboardShortcut(id: 5, keyCode: kVK_ANSI_R)
+    }
+
+    private func registerKeyboardShortcut(id: UInt32, keyCode: Int) {
+        var hotKeyRef: EventHotKeyRef?
+        let hotKeyID = EventHotKeyID(signature: pickerFourCharacterCode("PDKS"), id: id)
+
+        let status = RegisterEventHotKey(
+            UInt32(keyCode),
+            UInt32(cmdKey),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        if status == noErr, let hotKeyRef {
+            shortcutHotKeyRefs.append(hotKeyRef)
+        }
+    }
+
+    private func unregisterKeyboardShortcuts() {
+        for hotKeyRef in shortcutHotKeyRefs {
+            UnregisterEventHotKey(hotKeyRef)
+        }
+
+        shortcutHotKeyRefs.removeAll()
+
+        if let shortcutHandlerRef {
+            RemoveEventHandler(shortcutHandlerRef)
+            self.shortcutHandlerRef = nil
+        }
+    }
+
+    private func handleRegisteredShortcut(id: UInt32) {
+        guard panel?.isVisible == true else {
+            return
+        }
+
+        switch id {
+        case 1:
+            selection.select(.left)
+        case 2:
+            selection.select(.right)
+        case 3:
+            selection.select(.down)
+        case 4:
+            selection.select(.up)
+        case 5:
+            selection.requestRename()
+        default:
+            break
+        }
+    }
+
+    private func handleCommandShortcut(_ event: NSEvent) -> Bool {
+        guard panel?.isVisible == true else {
+            return false
+        }
+
+        let shortcutModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+
+        guard shortcutModifiers == .command else {
+            return false
+        }
+
+        switch event.keyCode {
+        case 123:
+            selection.select(.left)
+        case 124:
+            selection.select(.right)
+        case 125:
+            selection.select(.down)
+        case 126:
+            selection.select(.up)
+        case 15:
+            selection.requestRename()
+        default:
+            return false
+        }
+
+        return true
     }
 
     private func closeIfClickIsOutsidePanel() {
@@ -179,13 +350,60 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
     }
 }
 
+private func pickerFourCharacterCode(_ string: String) -> OSType {
+    string.utf8.reduce(0) { result, byte in
+        (result << 8) + OSType(byte)
+    }
+}
+
 final class PickerSelection: ObservableObject {
     @Published var selectedItem: MediaItem?
+    @Published var renameRequest: MediaItem?
+
+    var visibleItems: [MediaItem] = []
+    var columnCount = 5
+
+    func select(_ direction: PickerNavigationDirection) {
+        guard !visibleItems.isEmpty else {
+            selectedItem = nil
+            return
+        }
+
+        let currentIndex = selectedItem.flatMap { visibleItems.firstIndex(of: $0) } ?? 0
+        let offset: Int
+
+        switch direction {
+        case .left:
+            offset = -1
+        case .right:
+            offset = 1
+        case .up:
+            offset = -max(1, columnCount)
+        case .down:
+            offset = max(1, columnCount)
+        }
+
+        let nextIndex = min(max(currentIndex + offset, 0), visibleItems.count - 1)
+        selectedItem = visibleItems[nextIndex]
+    }
+
+    func requestRename() {
+        renameRequest = selectedItem
+    }
+}
+
+enum PickerNavigationDirection {
+    case left
+    case right
+    case up
+    case down
 }
 
 final class KeyHandlingPanel: GlassPanel {
     var onEscape: (() -> Void)?
     var onReturn: (() -> Void)?
+    var onNavigation: ((PickerNavigationDirection) -> Void)?
+    var onRename: (() -> Void)?
 
     override var canBecomeKey: Bool {
         true
@@ -193,6 +411,22 @@ final class KeyHandlingPanel: GlassPanel {
 
     override var canBecomeMain: Bool {
         true
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if handleCommandShortcut(event) {
+            return
+        }
+
+        super.sendEvent(event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if handleCommandShortcut(event) {
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -208,5 +442,34 @@ final class KeyHandlingPanel: GlassPanel {
 
     override func cancelOperation(_ sender: Any?) {
         onEscape?()
+    }
+
+    private func handleCommandShortcut(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown else {
+            return false
+        }
+
+        let shortcutModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+
+        guard shortcutModifiers == .command else {
+            return false
+        }
+
+        switch event.keyCode {
+        case 123:
+            onNavigation?(.left)
+        case 124:
+            onNavigation?(.right)
+        case 125:
+            onNavigation?(.down)
+        case 126:
+            onNavigation?(.up)
+        case 15:
+            onRename?()
+        default:
+            return false
+        }
+
+        return true
     }
 }
