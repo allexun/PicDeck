@@ -4,16 +4,25 @@ import Combine
 @MainActor
 final class AppCoordinator: ObservableObject {
     let libraryStore = MediaLibraryStore()
+    let giphySearchStore: GiphySearchStore
 
     private let pasteboardService = PasteboardService()
     private lazy var pasteController = PasteController(pasteboardService: pasteboardService)
-    private lazy var pickerPanelController = PickerPanelController(libraryStore: libraryStore) { [weak self] item in
-        self?.pasteController.paste(item)
+    private lazy var pickerPanelController = PickerPanelController(
+        libraryStore: libraryStore,
+        giphySearchStore: giphySearchStore
+    ) { [weak self] item in
+        self?.paste(item)
     }
 
     private var shortcutController: GlobalShortcutController?
 
     init() {
+        let giphyConfigurationURL = libraryStore.libraryFolderURL
+            .appendingPathComponent("giphy-config")
+            .appendingPathExtension("json")
+
+        giphySearchStore = GiphySearchStore(configurationFileURL: giphyConfigurationURL)
         libraryStore.refresh()
         shortcutController = GlobalShortcutController { [weak self] in
             self?.openPicker()
@@ -47,9 +56,40 @@ final class AppCoordinator: ObservableObject {
         NSApp.terminate(nil)
     }
 
+    private func paste(_ item: MediaItem) {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                let resolvedItem: MediaItem
+
+                switch item.source {
+                case .library:
+                    resolvedItem = item
+                case .giphy(let gif):
+                    resolvedItem = try await libraryStore.importGiphyGIF(gif)
+                }
+
+                pasteController.paste(resolvedItem)
+            } catch {
+                presentRemoteImportError(error)
+            }
+        }
+    }
+
     private func presentImportError(_ error: Error) {
         let alert = NSAlert()
         alert.messageText = "Could not import image"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
+
+    private func presentRemoteImportError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "Could not import GIF"
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.runModal()

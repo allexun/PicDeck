@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 final class PickerPanelController: NSObject, NSWindowDelegate {
     private let libraryStore: MediaLibraryStore
+    private let giphySearchStore: GiphySearchStore
     private let onPaste: (MediaItem) -> Void
     private let selection = PickerSelection()
     private var panel: KeyHandlingPanel?
@@ -14,8 +15,9 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
     private var shortcutHotKeyRefs: [EventHotKeyRef] = []
     private var shortcutHandlerRef: EventHandlerRef?
 
-    init(libraryStore: MediaLibraryStore, onPaste: @escaping (MediaItem) -> Void) {
+    init(libraryStore: MediaLibraryStore, giphySearchStore: GiphySearchStore, onPaste: @escaping (MediaItem) -> Void) {
         self.libraryStore = libraryStore
+        self.giphySearchStore = giphySearchStore
         self.onPaste = onPaste
     }
 
@@ -39,6 +41,7 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
         let panel = KeyHandlingPanel(NSHostingView(
             rootView: PickerView(
                 store: libraryStore,
+                giphySearchStore: giphySearchStore,
                 selection: selection,
                 onCancel: { [weak self] in
                     self?.close()
@@ -81,6 +84,10 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
     }
 
     private func rename(_ item: MediaItem) -> MediaItem? {
+        guard item.isLibraryItem else {
+            return nil
+        }
+
         stopOutsideClickMonitoring()
         stopKeyboardMonitoring()
 

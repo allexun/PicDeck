@@ -6,6 +6,7 @@ struct MediaThumbnailView: View {
     let onRename: () -> Void
 
     @State private var image: NSImage?
+    @State private var thumbnailTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -49,17 +50,57 @@ struct MediaThumbnailView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contextMenu {
-            Button {
-                onRename()
-            } label: {
-                Label("Rename", systemImage: "pencil")
+            if item.isLibraryItem {
+                Button {
+                    onRename()
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
             }
         }
         .onAppear {
-            image = NSImage(contentsOf: item.url)
+            loadImage()
         }
-        .onChange(of: item.url) {
+        .onChange(of: item.id) {
+            loadImage()
+        }
+        .onDisappear {
+            thumbnailTask?.cancel()
+            thumbnailTask = nil
+        }
+    }
+
+    private func loadImage() {
+        thumbnailTask?.cancel()
+
+        if item.isLibraryItem {
             image = NSImage(contentsOf: item.url)
+            return
+        }
+
+        image = nil
+        guard let previewURL = item.previewURL else {
+            return
+        }
+
+        thumbnailTask = Task {
+            do {
+                let (data, response) = try await URLSession.shared.data(from: previewURL)
+                guard
+                    !Task.isCancelled,
+                    let httpResponse = response as? HTTPURLResponse,
+                    (200 ... 299).contains(httpResponse.statusCode),
+                    let image = NSImage(data: data)
+                else {
+                    return
+                }
+
+                await MainActor.run {
+                    self.image = image
+                }
+            } catch {
+                return
+            }
         }
     }
 }
