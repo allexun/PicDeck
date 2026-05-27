@@ -80,6 +80,10 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
             self?.selection.requestRename()
         }
 
+        panel.onSwitchSearchMode = { [weak self] in
+            self?.selection.requestSearchModeSwitch()
+        }
+
         return panel
     }
 
@@ -366,6 +370,7 @@ private func pickerFourCharacterCode(_ string: String) -> OSType {
 final class PickerSelection: ObservableObject {
     @Published var selectedItem: MediaItem?
     @Published var renameRequest: MediaItem?
+    @Published var searchModeSwitchRequest = 0
 
     var visibleItems: [MediaItem] = []
     var columnCount = 5
@@ -397,6 +402,10 @@ final class PickerSelection: ObservableObject {
     func requestRename() {
         renameRequest = selectedItem
     }
+
+    func requestSearchModeSwitch() {
+        searchModeSwitchRequest += 1
+    }
 }
 
 enum PickerNavigationDirection {
@@ -411,6 +420,7 @@ final class KeyHandlingPanel: GlassPanel {
     var onReturn: (() -> Void)?
     var onNavigation: ((PickerNavigationDirection) -> Void)?
     var onRename: (() -> Void)?
+    var onSwitchSearchMode: (() -> Void)?
 
     override var canBecomeKey: Bool {
         true
@@ -457,6 +467,11 @@ final class KeyHandlingPanel: GlassPanel {
         }
 
         let shortcutModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+
+        if event.keyCode == 48, shortcutModifiers.isEmpty, attachedSheet == nil {
+            onSwitchSearchMode?()
+            return true
+        }
 
         guard shortcutModifiers == .command else {
             return false

@@ -97,6 +97,9 @@ struct PickerView: View {
             selection.renameRequest = nil
             rename(item)
         }
+        .onChange(of: selection.searchModeSwitchRequest) {
+            switchSearchMode()
+        }
         .onSubmit {
             if let item = selection.selectedItem {
                 onPaste(item)
@@ -336,6 +339,11 @@ struct PickerView: View {
         }
 
         updateRemoteSearchIfNeeded()
+    }
+
+    private func switchSearchMode() {
+        searchMode = searchMode == .library ? .giphy : .library
+        searchFieldIsFocused = true
     }
 
     private var giphySetupSheet: some View {
