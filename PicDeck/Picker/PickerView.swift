@@ -16,6 +16,7 @@ struct PickerView: View {
     @State private var giphyAPIKey = ""
     @State private var isShowingGiphySetup = false
     @State private var giphySetupErrorMessage: String?
+    @State private var previewedItem: MediaItem?
     @FocusState private var searchFieldIsFocused: Bool
 
     private let gridSpacing: CGFloat = 14
@@ -53,19 +54,25 @@ struct PickerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            header
+        ZStack {
+            VStack(spacing: 16) {
+                header
 
-            if let importErrorMessage {
-                Text(importErrorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let importErrorMessage {
+                    Text(importErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                contentView
             }
+            .padding(20)
 
-            contentView
+            if let previewedItem {
+                fullWindowPreview(previewedItem)
+            }
         }
-        .padding(20)
         .onAppear {
             searchFieldIsFocused = true
             syncSelection()
@@ -100,6 +107,9 @@ struct PickerView: View {
         .onChange(of: selection.searchModeSwitchRequest) {
             switchSearchMode()
         }
+        .onChange(of: selection.previewRequest) {
+            togglePreview()
+        }
         .onSubmit {
             if let item = selection.selectedItem {
                 onPaste(item)
@@ -107,6 +117,48 @@ struct PickerView: View {
         }
         .sheet(isPresented: $isShowingGiphySetup) {
             giphySetupSheet
+        }
+    }
+
+    private func fullWindowPreview(_ item: MediaItem) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Rectangle()
+                .fill(.black.opacity(0.88))
+
+            previewImageView(item)
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Button {
+                previewedItem = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .padding(14)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            previewedItem = nil
+        }
+        .transition(.opacity)
+    }
+
+    @ViewBuilder
+    private func previewImageView(_ item: MediaItem) -> some View {
+        if item.isGIF {
+            AnimatedMediaView(item: item)
+        } else if let image = NSImage(contentsOf: item.url) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+        } else {
+            Image(systemName: "photo")
+                .font(.system(size: 54))
+                .foregroundStyle(.white.secondary)
         }
     }
 
@@ -344,6 +396,17 @@ struct PickerView: View {
     private func switchSearchMode() {
         searchMode = searchMode == .library ? .giphy : .library
         searchFieldIsFocused = true
+    }
+
+    private func togglePreview() {
+        guard let selectedItem = selection.selectedItem else {
+            previewedItem = nil
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.12)) {
+            previewedItem = previewedItem == selectedItem ? nil : selectedItem
+        }
     }
 
     private var giphySetupSheet: some View {

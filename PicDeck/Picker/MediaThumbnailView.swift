@@ -11,16 +11,7 @@ struct MediaThumbnailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                if let image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .padding(8)
-                } else {
-                    Image(systemName: item.isGIF ? "livephoto" : "photo")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.secondary)
-                }
+                thumbnailImageView
 
                 if item.isGIF {
                     Text("GIF")
@@ -68,6 +59,30 @@ struct MediaThumbnailView: View {
             thumbnailTask?.cancel()
             thumbnailTask = nil
         }
+    }
+
+    @ViewBuilder
+    private var thumbnailImageView: some View {
+        ZStack {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(8)
+            } else {
+                Image(systemName: item.isGIF ? "livephoto" : "photo")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.secondary)
+            }
+
+            if item.isGIF && isSelected {
+                AnimatedMediaView(item: item)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func loadImage() {

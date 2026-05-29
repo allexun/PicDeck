@@ -84,6 +84,10 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
             self?.selection.requestSearchModeSwitch()
         }
 
+        panel.onPreview = { [weak self] in
+            self?.selection.requestPreview()
+        }
+
         return panel
     }
 
@@ -250,6 +254,7 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
         registerKeyboardShortcut(id: 3, keyCode: kVK_DownArrow)
         registerKeyboardShortcut(id: 4, keyCode: kVK_UpArrow)
         registerKeyboardShortcut(id: 5, keyCode: kVK_ANSI_R)
+        registerKeyboardShortcut(id: 6, keyCode: kVK_ANSI_P)
     }
 
     private func registerKeyboardShortcut(id: UInt32, keyCode: Int) {
@@ -299,6 +304,8 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
             selection.select(.up)
         case 5:
             selection.requestRename()
+        case 6:
+            selection.requestPreview()
         default:
             break
         }
@@ -326,6 +333,8 @@ final class PickerPanelController: NSObject, NSWindowDelegate {
             selection.select(.up)
         case 15:
             selection.requestRename()
+        case 35:
+            selection.requestPreview()
         default:
             return false
         }
@@ -371,6 +380,7 @@ final class PickerSelection: ObservableObject {
     @Published var selectedItem: MediaItem?
     @Published var renameRequest: MediaItem?
     @Published var searchModeSwitchRequest = 0
+    @Published var previewRequest = 0
 
     var visibleItems: [MediaItem] = []
     var columnCount = 5
@@ -406,6 +416,10 @@ final class PickerSelection: ObservableObject {
     func requestSearchModeSwitch() {
         searchModeSwitchRequest += 1
     }
+
+    func requestPreview() {
+        previewRequest += 1
+    }
 }
 
 enum PickerNavigationDirection {
@@ -421,6 +435,7 @@ final class KeyHandlingPanel: GlassPanel {
     var onNavigation: ((PickerNavigationDirection) -> Void)?
     var onRename: (() -> Void)?
     var onSwitchSearchMode: (() -> Void)?
+    var onPreview: (() -> Void)?
 
     override var canBecomeKey: Bool {
         true
@@ -488,6 +503,8 @@ final class KeyHandlingPanel: GlassPanel {
             onNavigation?(.up)
         case 15:
             onRename?()
+        case 35:
+            onPreview?()
         default:
             return false
         }
