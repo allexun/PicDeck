@@ -5,12 +5,14 @@ import Combine
 final class AppCoordinator: ObservableObject {
     let libraryStore = MediaLibraryStore()
     let giphySearchStore: GiphySearchStore
+    let klipySearchStore: KlipySearchStore
 
     private let pasteboardService = PasteboardService()
     private lazy var pasteController = PasteController(pasteboardService: pasteboardService)
     private lazy var pickerPanelController = PickerPanelController(
         libraryStore: libraryStore,
-        giphySearchStore: giphySearchStore
+        giphySearchStore: giphySearchStore,
+        klipySearchStore: klipySearchStore
     ) { [weak self] item in
         self?.paste(item)
     }
@@ -21,8 +23,13 @@ final class AppCoordinator: ObservableObject {
         let giphyConfigurationURL = libraryStore.libraryFolderURL
             .appendingPathComponent("giphy-config")
             .appendingPathExtension("json")
-
         giphySearchStore = GiphySearchStore(configurationFileURL: giphyConfigurationURL)
+
+        let klipyConfigurationURL = libraryStore.libraryFolderURL
+            .appendingPathComponent("klipy-config")
+            .appendingPathExtension("json")
+        klipySearchStore = KlipySearchStore(configurationFileURL: klipyConfigurationURL)
+
         libraryStore.refresh()
         shortcutController = GlobalShortcutController { [weak self] in
             self?.openPicker()
@@ -70,6 +77,8 @@ final class AppCoordinator: ObservableObject {
                     resolvedItem = item
                 case .giphy(let gif):
                     resolvedItem = try await libraryStore.importGiphyGIF(gif)
+                case .klipy(let gif):
+                    resolvedItem = try await libraryStore.importKlipyGIF(gif)
                 }
 
                 pasteController.paste(resolvedItem)
