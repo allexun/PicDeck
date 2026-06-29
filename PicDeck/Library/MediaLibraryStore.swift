@@ -106,6 +106,28 @@ final class MediaLibraryStore: ObservableObject {
     }
 
     @discardableResult
+    func importKlipyGIF(_ gif: KlipyGIF) async throws -> MediaItem {
+        try createLibraryFolderIfNeeded()
+
+        let destinationURL = uniqueDestinationURL(
+            preferredName: "\(MediaItem(klipyGIF: gif).filenameStem).gif",
+            fallbackExtension: "gif"
+        )
+
+        let (temporaryURL, response) = try await URLSession.shared.download(from: gif.originalGIFURL)
+
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200 ... 299).contains(httpResponse.statusCode) {
+            throw KlipyImportError.downloadFailed
+        }
+
+        try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
+        refresh()
+
+        return items.first { $0.url == destinationURL } ?? MediaItem(url: destinationURL)
+    }
+
+    @discardableResult
     func rename(_ item: MediaItem, toBaseName proposedBaseName: String) throws -> MediaItem {
         try createLibraryFolderIfNeeded()
 
@@ -314,6 +336,17 @@ enum GiphyImportError: LocalizedError {
         switch self {
         case .downloadFailed:
             "Could not download the selected GIF from Giphy."
+        }
+    }
+}
+
+enum KlipyImportError: LocalizedError {
+    case downloadFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .downloadFailed:
+            "Could not download the selected GIF from Klipy."
         }
     }
 }

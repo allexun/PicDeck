@@ -3,6 +3,7 @@ import SwiftUI
 struct PickerView: View {
     @ObservedObject var store: MediaLibraryStore
     @ObservedObject var giphySearchStore: GiphySearchStore
+    @ObservedObject var klipySearchStore: KlipySearchStore
     @ObservedObject var selection: PickerSelection
 
     let onCancel: () -> Void
@@ -16,6 +17,9 @@ struct PickerView: View {
     @State private var giphyAPIKey = ""
     @State private var isShowingGiphySetup = false
     @State private var giphySetupErrorMessage: String?
+    @State private var klipyAPIKey = ""
+    @State private var isShowingKlipySetup = false
+    @State private var klipySetupErrorMessage: String?
     @State private var previewedItem: MediaItem?
     @FocusState private var searchFieldIsFocused: Bool
 
@@ -50,6 +54,8 @@ struct PickerView: View {
             localItems
         case .giphy:
             giphySearchStore.items
+        case .klipy:
+            klipySearchStore.items
         }
     }
 
@@ -78,6 +84,7 @@ struct PickerView: View {
             syncSelection()
             updateRemoteSearchIfNeeded()
             giphyAPIKey = giphySearchStore.apiKey
+            klipyAPIKey = klipySearchStore.apiKey
         }
         .onChange(of: searchText) {
             syncSelection()
@@ -94,6 +101,12 @@ struct PickerView: View {
             syncSelection()
         }
         .onChange(of: giphySearchStore.errorMessage) {
+            syncSelection()
+        }
+        .onChange(of: klipySearchStore.items) {
+            syncSelection()
+        }
+        .onChange(of: klipySearchStore.errorMessage) {
             syncSelection()
         }
         .onChange(of: selection.renameRequest) {
@@ -117,6 +130,9 @@ struct PickerView: View {
         }
         .sheet(isPresented: $isShowingGiphySetup) {
             giphySetupSheet
+        }
+        .sheet(isPresented: $isShowingKlipySetup) {
+            klipySetupSheet
         }
     }
 
@@ -174,7 +190,8 @@ struct PickerView: View {
             HStack(spacing: 10) {
                 searchField
 
-                if searchMode == .library {
+                switch searchMode {
+                case .library:
                     Button {
                         importFromClipboard()
                     } label: {
@@ -184,13 +201,25 @@ struct PickerView: View {
                     .background(.quaternary.opacity(0.65))
                     .cornerRadius(8)
                     .frame(maxHeight: .infinity)
-                } else {
+                case .giphy:
                     Button {
                         giphyAPIKey = giphySearchStore.apiKey
                         giphySetupErrorMessage = nil
                         isShowingGiphySetup = true
                     } label: {
                         Label("Giphy Key", systemImage: "key")
+                            .frame(maxHeight: .infinity)
+                    }
+                    .background(.quaternary.opacity(0.65))
+                    .cornerRadius(8)
+                    .frame(maxHeight: .infinity)
+                case .klipy:
+                    Button {
+                        klipyAPIKey = klipySearchStore.apiKey
+                        klipySetupErrorMessage = nil
+                        isShowingKlipySetup = true
+                    } label: {
+                        Label("Klipy Key", systemImage: "key")
                             .frame(maxHeight: .infinity)
                     }
                     .background(.quaternary.opacity(0.65))
@@ -244,6 +273,15 @@ struct PickerView: View {
         } else if searchMode == .giphy, giphySearchStore.isLoading {
             ProgressView("Searching Giphy...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if searchMode == .klipy, let errorMessage = klipySearchStore.errorMessage {
+            errorView(
+                title: "Klipy search",
+                systemImage: "sparkles.tv",
+                description: errorMessage
+            )
+        } else if searchMode == .klipy, klipySearchStore.isLoading {
+            ProgressView("Searching Klipy...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if displayedItems.isEmpty {
             emptyStateView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -290,6 +328,10 @@ struct PickerView: View {
             ProgressView("Loading more GIFs...")
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
+        } else if searchMode == .klipy, klipySearchStore.isLoadingNextPage {
+            ProgressView("Loading more GIFs...")
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
         }
     }
 
@@ -309,6 +351,8 @@ struct PickerView: View {
         .onAppear {
             if searchMode == .giphy {
                 giphySearchStore.loadNextPageIfNeeded(currentItem: item)
+            } else if searchMode == .klipy {
+                klipySearchStore.loadNextPageIfNeeded(currentItem: item)
             }
         }
     }
@@ -325,6 +369,8 @@ struct PickerView: View {
             ContentUnavailableView("No media found", systemImage: "photo", description: Text("Add images or GIFs to ~/Pictures/PicDeck Library/"))
         case .giphy:
             ContentUnavailableView("Search Giphy", systemImage: "sparkles.tv", description: Text("Type at least 3 characters. Requests are delayed and cached to avoid burning the API limit."))
+        case .klipy:
+            ContentUnavailableView("Search Klipy", systemImage: "sparkles.tv", description: Text("Type at least 3 characters. Requests are delayed and cached to avoid burning the API limit."))
         }
     }
 
@@ -375,26 +421,45 @@ struct PickerView: View {
     }
 
     private func updateRemoteSearchIfNeeded() {
-        guard searchMode == .giphy else {
-            return
+        switch searchMode {
+        case .library:
+            break
+        case .giphy:
+            giphySearchStore.updateQuery(searchText)
+        case .klipy:
+            klipySearchStore.updateQuery(searchText)
         }
-
-        giphySearchStore.updateQuery(searchText)
     }
 
     private func activateSearchMode() {
-        if searchMode == .giphy, !giphySearchStore.isConfigured {
-            giphyAPIKey = giphySearchStore.apiKey
-            giphySetupErrorMessage = nil
-            isShowingGiphySetup = true
-            return
+        switch searchMode {
+        case .library:
+            break
+        case .giphy:
+            if !giphySearchStore.isConfigured {
+                giphyAPIKey = giphySearchStore.apiKey
+                giphySetupErrorMessage = nil
+                isShowingGiphySetup = true
+            } else {
+                updateRemoteSearchIfNeeded()
+            }
+        case .klipy:
+            if !klipySearchStore.isConfigured {
+                klipyAPIKey = klipySearchStore.apiKey
+                klipySetupErrorMessage = nil
+                isShowingKlipySetup = true
+            } else {
+                updateRemoteSearchIfNeeded()
+            }
         }
-
-        updateRemoteSearchIfNeeded()
     }
 
     private func switchSearchMode() {
-        searchMode = searchMode == .library ? .giphy : .library
+        switch searchMode {
+        case .library: searchMode = .giphy
+        case .giphy: searchMode = .klipy
+        case .klipy: searchMode = .library
+        }
         searchFieldIsFocused = true
     }
 
@@ -457,11 +522,61 @@ struct PickerView: View {
             giphySetupErrorMessage = error.localizedDescription
         }
     }
+
+    private var klipySetupSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Enable Klipy Search")
+                .font(.title3.weight(.semibold))
+
+            Text("Add your Klipy API key once. PicDeck will store it in a JSON file inside `~/Pictures/PicDeck Library/` and reuse it on the next launch.")
+                .foregroundStyle(.secondary)
+
+            TextField("Klipy API key", text: $klipyAPIKey)
+                .textFieldStyle(.roundedBorder)
+
+            if let klipySetupErrorMessage {
+                Text(klipySetupErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                Spacer()
+
+                Button("Cancel") {
+                    if !klipySearchStore.isConfigured {
+                        searchMode = .library
+                    }
+
+                    isShowingKlipySetup = false
+                }
+
+                Button("Save") {
+                    saveKlipyAPIKey()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
+    }
+
+    private func saveKlipyAPIKey() {
+        do {
+            try klipySearchStore.saveAPIKey(klipyAPIKey)
+            klipySetupErrorMessage = nil
+            isShowingKlipySetup = false
+            updateRemoteSearchIfNeeded()
+        } catch {
+            klipySetupErrorMessage = error.localizedDescription
+        }
+    }
 }
 
 private enum SearchMode: String, CaseIterable, Identifiable {
     case library
     case giphy
+    case klipy
 
     var id: String { rawValue }
 
@@ -471,6 +586,8 @@ private enum SearchMode: String, CaseIterable, Identifiable {
             "Library"
         case .giphy:
             "Giphy"
+        case .klipy:
+            "Klipy"
         }
     }
 
@@ -480,6 +597,8 @@ private enum SearchMode: String, CaseIterable, Identifiable {
             "Search filenames"
         case .giphy:
             "Search Giphy GIFs"
+        case .klipy:
+            "Search Klipy GIFs"
         }
     }
 }
