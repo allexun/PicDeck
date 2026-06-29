@@ -24,7 +24,7 @@ struct MediaItem: Identifiable, Hashable {
     }
 
     init(giphyGIF: GiphyGIF) {
-        let normalizedTitle = Self.normalizedRemoteFilenameStem(from: giphyGIF.title, fallbackID: giphyGIF.id)
+        let normalizedTitle = Self.normalizedRemoteFilenameStem(from: giphyGIF.title, fallbackID: giphyGIF.id, prefix: "Giphy")
 
         self.id = "giphy:\(giphyGIF.id)"
         self.url = giphyGIF.originalGIFURL
@@ -36,6 +36,19 @@ struct MediaItem: Identifiable, Hashable {
         self.source = .giphy(giphyGIF)
     }
 
+    init(klipyGIF: KlipyGIF) {
+        let normalizedTitle = Self.normalizedRemoteFilenameStem(from: klipyGIF.title, fallbackID: klipyGIF.id, prefix: "Klipy")
+
+        self.id = "klipy:\(klipyGIF.id)"
+        self.url = klipyGIF.originalGIFURL
+        self.filename = "\(normalizedTitle).gif"
+        self.filenameStem = normalizedTitle
+        self.fileExtension = "gif"
+        self.isGIF = true
+        self.previewURL = klipyGIF.previewImageURL
+        self.source = .klipy(klipyGIF)
+    }
+
     var isLibraryItem: Bool {
         if case .library = source {
             return true
@@ -44,7 +57,7 @@ struct MediaItem: Identifiable, Hashable {
         return false
     }
 
-    private static func normalizedRemoteFilenameStem(from title: String, fallbackID: String) -> String {
+    private static func normalizedRemoteFilenameStem(from title: String, fallbackID: String, prefix: String) -> String {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let filteredScalars = trimmedTitle.unicodeScalars.map { scalar -> Character in
             let invalidCharacters = CharacterSet(charactersIn: "/:\\\n\r\t")
@@ -54,16 +67,24 @@ struct MediaItem: Identifiable, Hashable {
             .replacingOccurrences(of: #"[\s-]+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return collapsedTitle.isEmpty ? "Giphy \(fallbackID)" : collapsedTitle
+        return collapsedTitle.isEmpty ? "\(prefix) \(fallbackID)" : collapsedTitle
     }
 }
 
 enum MediaItemSource: Hashable {
     case library
     case giphy(GiphyGIF)
+    case klipy(KlipyGIF)
 }
 
 struct GiphyGIF: Hashable {
+    let id: String
+    let title: String
+    let previewImageURL: URL
+    let originalGIFURL: URL
+}
+
+struct KlipyGIF: Hashable {
     let id: String
     let title: String
     let previewImageURL: URL
